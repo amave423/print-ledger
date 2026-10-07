@@ -1,0 +1,9 @@
+{
+  "name": "Мастерская — учёт 3D-печати",
+  "short_name": "Мастерская",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#1B1E23",
+  "theme_color": "#1B1E23",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
