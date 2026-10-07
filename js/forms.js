@@ -1,4 +1,5 @@
 import { state, saveRow, insertMany, deleteRow } from './db.js';
+import { ui } from './views.js';
 import { compute, presets, family, kwh, matches, pricePerGram, rub, grams, esc, today } from './calc.js';
 
 const attr = v => esc(v ?? '');
@@ -22,7 +23,7 @@ function orderForm(o = {}) {
   const t = o.temps || {};
   return `<form class="frm" data-kind="order">
     ${field('Дата', date('ordered_on', o.ordered_on))}
-    ${field('Принтер', `<select name="printer_id">${state.printers.map(p => `<option value="${p.id}" ${p.id === o.printer_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>`)}
+    ${field('Принтер', `<select name="printer_id">${state.printers.map(p => `<option value="${p.id}" ${p.id === (o.printer_id || ui.printer) ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>`)}
     ${field('Что печатаем', `<input name="item" value="${attr(o.item)}" placeholder="Например, кронштейн для камеры">`, { full: 1 })}
     ${field('Клиент', `<input name="client" value="${attr(o.client)}" placeholder="Имя, откуда пришёл">`, { full: 1 })}
     ${field('Пластик', opts.length ? `<select name="plastic" required>${opts.join('')}</select>` : '<p class="note">Сначала добавьте пластик на склад.</p>', { full: 1, hint: 'спишется с самой старой катушки' })}
@@ -62,6 +63,7 @@ function extraForm(e = {}) {
     ${field('Категория', `<input name="category" list="dl-cat" value="${attr(e.category)}" placeholder="Сопла">`)}
     ${field('Цена, ₽', num('price', e.price, 'required placeholder="0"'))}
     ${field('Дата покупки', date('bought_on', e.bought_on))}
+    ${field('Для какого принтера', `<select name="printer_id"><option value="">Общая покупка</option>${state.printers.map(p => `<option value="${p.id}" ${p.id === (e.id ? e.printer_id : ui.printer) ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>`)}
     ${actions(e, e.id ? 'Сохранить изменения' : 'Добавить покупку')}
     <datalist id="dl-cat">${[...new Set(state.extras.map(x => x.category))].map(c => `<option value="${attr(c)}">`).join('')}</datalist>
   </form>`;
@@ -139,7 +141,7 @@ export function wireForm(f, row, onDone, onError) {
         const s = { name: d.name.trim(), brand: d.brand.trim(), weight: n('weight'), price: n('price'), bought_on: d.bought_on };
         id ? await saveRow('spools', { id, ...s }) : await insertMany('spools', Array.from({ length: Math.max(1, n('qty')) }, () => ({ ...s })));
       }
-      if (kind === 'extra') await saveRow('extras', { id, name: d.name.trim(), category: d.category.trim() || 'Другое', price: n('price'), bought_on: d.bought_on });
+      if (kind === 'extra') await saveRow('extras', { id, name: d.name.trim(), category: d.category.trim() || 'Другое', price: n('price'), bought_on: d.bought_on, printer_id: d.printer_id || null });
       if (kind === 'printer') await saveRow('printers', { id, name: d.name.trim(), price: n('price'), bought_on: d.bought_on });
       onDone(spec.done[0]);
     } catch (err) { busy(false); onError(err); }

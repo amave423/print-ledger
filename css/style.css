@@ -26,7 +26,21 @@ nav.tabs button[aria-current=true]{color:var(--text)}
 nav.tabs button[aria-current=true] svg{color:var(--accent)}
 nav.tabs .plus{background:var(--accent);color:var(--on-accent);margin:2px 8px;font-size:12px}
 nav.tabs .plus svg{color:var(--on-accent)}
-body:not(.ready) nav.tabs,body:not(.ready) .gear{visibility:hidden}
+body:not(.ready) nav.tabs,body:not(.ready) .gear,body:not(.ready) #printers{visibility:hidden}
+
+/* переключатель принтеров: на телефоне — полоса под шапкой, на компьютере — слева под меню */
+.side{display:contents}
+#printers{position:sticky;top:calc(63px + env(safe-area-inset-top));z-index:3;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:10px 16px;background:rgba(27,30,35,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+#printers:empty{display:none}
+.pr-h{display:none}
+.pr{flex:none;display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:6px 12px;text-align:left;line-height:1.25}
+.pr b{font-weight:600;font-size:14px;white-space:nowrap}
+.pr small{color:var(--muted);font-size:11.5px;white-space:nowrap}
+.pr[aria-pressed=true]{border-color:var(--accent);background:rgba(47,211,181,.12)}
+.pr[aria-pressed=true] small{color:var(--accent)}
+.pr-add{justify-content:center;border-style:dashed;background:none}
+.pr-add b{color:var(--muted)}
+h1 small{display:block;font-size:13px;font-weight:500;color:var(--muted);letter-spacing:0;margin-top:2px}
 main{padding:16px 16px 110px;max-width:1080px;margin:0 auto}
 
 /* главная */
@@ -163,7 +177,14 @@ body.login nav.tabs,body.login .gear{display:none}
   body{display:grid;grid-template-columns:220px minmax(0,1fr);grid-template-rows:auto 1fr}
   body.login{display:block}
   .top{grid-column:1/-1}
-  nav.tabs{position:sticky;top:63px;height:calc(100vh - 63px);display:flex;flex-direction:column;gap:2px;border:0;border-right:1px solid var(--line);background:none;padding:16px 12px}
+  .side{display:flex;flex-direction:column;position:sticky;top:63px;height:calc(100vh - 63px);overflow-y:auto;border-right:1px solid var(--line)}
+  nav.tabs{position:static;display:flex;flex-direction:column;gap:2px;border:0;background:none;padding:16px 12px 8px}
+  #printers{position:static;flex-direction:column;overflow:visible;background:none;backdrop-filter:none;border:0;border-top:1px solid var(--line);margin:0 12px;padding:14px 0 16px;gap:4px}
+  .pr-h{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:0 12px 4px}
+  .pr{width:100%;border-color:transparent;background:none;padding:8px 12px}
+  .pr:hover{background:var(--panel)}
+  .pr[aria-pressed=true]{background:var(--panel);border-color:var(--accent)}
+  .pr-add{border-style:dashed;border-color:var(--line);margin-top:6px;align-items:center}
   nav.tabs button{flex-direction:row;font-size:15px;gap:10px;padding:10px 12px;justify-content:flex-start}
   nav.tabs button[aria-current=true]{background:var(--panel)}
   nav.tabs .plus{order:-1;margin:0 0 12px;justify-content:center}

@@ -42,7 +42,8 @@ export function pricePerGram(key) {
   return list.length ? sum(list, s => +s.price) / sum(list, s => +s.weight) : 0;
 }
 
-export function compute() {
+// pid — id принтера или 'all'. Склад считается по всем заказам сразу, остальное — по выбранному принтеру.
+export function compute(pid = 'all') {
   const left = Object.fromEntries(state.spools.map(s => [s.id, +s.weight]));
   const fifo = [...state.spools].sort((a, b) => a.bought_on.localeCompare(b.bought_on) || String(a.created_at).localeCompare(String(b.created_at)));
   const pre = presets();
@@ -78,19 +79,30 @@ export function compute() {
   const byFam = {};
   Object.values(groups).forEach(g => { const f = byFam[g.fam] ||= { fam: g.fam, left: 0, weight: 0, groups: [] }; f.left += g.left; f.weight += g.weight; f.groups.push(g); });
 
-  const spent = {
+  const all = orders;
+  const one = pid !== 'all' && state.printers.some(p => p.id === pid);
+  // старые заказы без принтера относим к первому
+  const ownerOf = o => o.printer_id && state.printers.some(p => p.id === o.printer_id) ? o.printer_id : state.printers[0]?.id;
+  const scoped = one ? all.filter(o => ownerOf(o) === pid) : all;
+  // для одного принтера пластик считается по израсходованному в его заказах, допы — только привязанные к нему
+  const spent = one ? {
+    printers: +state.printers.find(p => p.id === pid).price,
+    extras: sum(state.extras.filter(e => e.printer_id === pid), e => +e.price),
+    plastic: sum(scoped, o => o.cost),
+    energy: sum(scoped, o => o.energy),
+  } : {
     printers: sum(state.printers, p => +p.price),
     extras: sum(state.extras, e => +e.price),
     plastic: sum(state.spools, s => +s.price),
-    energy: sum(orders, o => o.energy),
+    energy: sum(all, o => o.energy),
   };
   const invested = spent.printers + spent.extras + spent.plastic + spent.energy;
-  const returned = sum(orders, o => o.income);
+  const returned = sum(scoped, o => o.income);
   let run = 0, payDay = null;
-  for (const o of orders) { run += o.income; if (!payDay && run >= invested) payDay = o.ordered_on; }
+  for (const o of scoped) { run += o.income; if (!payDay && run >= invested) payDay = o.ordered_on; }
 
   const months = {};
-  for (const o of orders) { const k = o.ordered_on.slice(0, 7); const m = months[k] ||= { key: k, income: 0, profit: 0, count: 0 }; m.income += o.income; m.profit += o.profit; m.count++; }
+  for (const o of scoped) { const k = o.ordered_on.slice(0, 7); const m = months[k] ||= { key: k, income: 0, profit: 0, count: 0 }; m.income += o.income; m.profit += o.profit; m.count++; }
   const monthList = [];
   const keys = Object.keys(months).sort();
   const end = today().slice(0, 7);
@@ -100,5 +112,5 @@ export function compute() {
   } else monthList.push({ key: end, income: 0, profit: 0, count: 0 });
   if (monthList.length < 2) monthList.unshift({ key: '', income: 0, profit: 0, count: 0 });
 
-  return { orders, spools, groups: Object.values(groups), byFam: Object.values(byFam), invested, returned, spent, payDay, months: monthList };
+  return { orders: scoped, allOrders: all, ownerOf, scoped: one, spools, groups: Object.values(groups), byFam: Object.values(byFam), invested, returned, spent, payDay, months: monthList };
 }

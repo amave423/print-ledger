@@ -1,11 +1,23 @@
 import { state } from './db.js';
 import { family, famColor, groupKey, rub, grams, dShort, monthName, sum, esc, presets } from './calc.js';
 
-export const ui = { screen: 'home', orderFilter: 'Все', open: new Set() };
+const saved = (() => { try { return localStorage.getItem('printer'); } catch { return null; } })();
+export const ui = { screen: 'home', orderFilter: 'Все', open: new Set(), printer: saved || 'all' };
+export const printerName = id => state.printers.find(p => p.id === id)?.name || '';
 
 const famDot = f => `<i class="dot" style="background:${famColor(f)}"></i>`;
 const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
 const plural = (n, one, few, many) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
+
+export function viewPrinters(all) {
+  const many = state.printers.length > 1;
+  const btn = (id, name, sub) => `<button class="pr" data-printer="${id}" aria-pressed="${ui.printer === id || (!many && id !== 'all')}"><b>${esc(name)}</b><small>${sub}</small></button>`;
+  const earned = id => sum(all.allOrders.filter(o => all.ownerOf(o) === id), o => o.income);
+  return `<h2 class="pr-h">Принтеры</h2>
+    ${many ? btn('all', 'Все принтеры', `получено ${rub(all.returned)}`) : ''}
+    ${state.printers.map(p => btn(p.id, p.name, `получено ${rub(earned(p.id))}`)).join('')}
+    <button class="pr pr-add" data-add="printer"><b>+ Принтер</b></button>`;
+}
 
 export function viewHome(C) {
   const max = Math.max(C.returned, C.invested, 1) * 1.04;
@@ -16,7 +28,7 @@ export function viewHome(C) {
   const lowCount = C.groups.filter(g => g.low && g.left > 0).length;
   return `
   <section class="card">
-    <h2>Окупаемость</h2>
+    <h2>Окупаемость${C.scoped ? ` · ${esc(printerName(ui.printer))}` : ''}</h2>
     <p class="pay-big">${over >= 0 ? '+' + rub(over) : rub(-over)}</p>
     <p class="pay-sub">${over >= 0 && C.payDay
       ? `Вложения вернулись <b>${new Date(C.payDay).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</b>, это уже заработано сверху.`
@@ -27,11 +39,12 @@ export function viewHome(C) {
     </div>
     <div class="track-legend"><span>0</span><span>получено от клиентов ${rub(C.returned)}</span></div>
     <div class="spent">
-      <div><small>Принтеры</small><b>${rub(C.spent.printers)}</b></div>
-      <div><small>Пластик</small><b>${rub(C.spent.plastic)}</b></div>
-      <div><small>Допы</small><b>${rub(C.spent.extras)}</b></div>
+      <div><small>${C.scoped ? 'Принтер' : 'Принтеры'}</small><b>${rub(C.spent.printers)}</b></div>
+      <div><small>${C.scoped ? 'Пластик в заказах' : 'Пластик'}</small><b>${rub(C.spent.plastic)}</b></div>
+      <div><small>${C.scoped ? 'Допы этого принтера' : 'Допы'}</small><b>${rub(C.spent.extras)}</b></div>
       <div><small>Электричество</small><b>${rub(C.spent.energy)}</b></div>
     </div>
+    ${C.scoped ? '<p class="note">Пластик считается по тому, что ушло на заказы этого принтера. Общие покупки допов сюда не входят.</p>' : ''}
   </section>
   <div class="row2">
     <section class="card">
@@ -59,7 +72,7 @@ export function viewOrders(C) {
     return head + `<article class="ord ${open ? 'is-open' : ''}">
       <button class="ord-main" data-toggle="${o.id}" aria-expanded="${open}">
         <span class="ord-date">${dShort(o.ordered_on)}</span>
-        <span class="ord-what"><b>${esc(o.item) || 'Без названия'}</b><small>${famDot(o.plastic)}${esc(o.plastic)} · ${grams(+o.weight)}${o.client ? ` · ${esc(o.client)}` : ''}</small></span>
+        <span class="ord-what"><b>${esc(o.item) || 'Без названия'}</b><small>${famDot(o.plastic)}${esc(o.plastic)} · ${grams(+o.weight)}${!C.scoped && state.printers.length > 1 ? ` · ${esc(printerName(C.ownerOf(o)))}` : ''}${o.client ? ` · ${esc(o.client)}` : ''}</small></span>
         <span class="ord-sum"><b>${rub(o.profit)}</b><small>из ${rub(o.income)}</small></span>
       </button>
       ${open ? `<dl class="ord-more">
@@ -76,7 +89,7 @@ export function viewOrders(C) {
       </dl>` : ''}
     </article>`;
   }).join('');
-  return `<div class="page-head"><h1>Заказы</h1><button class="btn" data-add="order">Новый заказ</button></div>
+  return `<div class="page-head"><h1>Заказы${C.scoped ? `<small>${esc(printerName(ui.printer))}</small>` : ''}</h1><button class="btn" data-add="order">Новый заказ</button></div>
     ${C.orders.length ? `
     <div class="chips">${['Все', ...fams].map(f => `<button class="chip" data-filter="${f}" aria-pressed="${ui.orderFilter === f}">${f !== 'Все' ? famDot(f) : ''}${f}</button>`).join('')}</div>
     <div class="totals"><span>${list.length} ${plural(list.length, 'заказ', 'заказа', 'заказов')}</span><span>${grams(sum(list, o => +o.weight))}</span><span>чистыми ${rub(sum(list, o => o.profit))}</span></div>
@@ -104,13 +117,14 @@ export function viewPlastic(C) {
 }
 
 export function viewExtras(C) {
-  const list = [...state.extras].sort((a, b) => b.bought_on.localeCompare(a.bought_on));
+  const list = [...state.extras].filter(e => !C.scoped || !e.printer_id || e.printer_id === ui.printer).sort((a, b) => b.bought_on.localeCompare(a.bought_on));
+  const many = state.printers.length > 1;
   const cats = {}; list.forEach(e => cats[e.category] = (cats[e.category] || 0) + +e.price);
-  return `<div class="page-head"><h1>Допы и расходники</h1><button class="btn" data-add="extra">Добавить покупку</button></div>
+  return `<div class="page-head"><h1>Допы и расходники${C.scoped ? `<small>${esc(printerName(ui.printer))} и общие</small>` : ''}</h1><button class="btn" data-add="extra">Добавить покупку</button></div>
     ${list.length ? `
     <div class="cats">${Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<div><small>${esc(c)}</small><b>${rub(v)}</b></div>`).join('')}</div>
-    <div class="totals"><span>${list.length} ${plural(list.length, 'покупка', 'покупки', 'покупок')}</span><span>всего ${rub(C.spent.extras)}</span></div>
-    <ul class="ex-list">${list.map(e => `<li><button data-edit="extra:${e.id}"><span class="ex-date">${dShort(e.bought_on)} ${e.bought_on.slice(2, 4)}</span><span class="ex-name">${esc(e.name)}<small>${esc(e.category)}</small></span><b>${rub(e.price)}</b></button></li>`).join('')}</ul>`
+    <div class="totals"><span>${list.length} ${plural(list.length, 'покупка', 'покупки', 'покупок')}</span><span>всего ${rub(sum(list, e => +e.price))}</span></div>
+    <ul class="ex-list">${list.map(e => `<li><button data-edit="extra:${e.id}"><span class="ex-date">${dShort(e.bought_on)} ${e.bought_on.slice(2, 4)}</span><span class="ex-name">${esc(e.name)}<small>${esc(e.category)}${many ? ` · ${e.printer_id ? esc(printerName(e.printer_id)) : 'общее'}` : ''}</small></span><b>${rub(e.price)}</b></button></li>`).join('')}</ul>`
     : '<p class="empty">Сюда записываются сопла, запчасти, инструменты и прочие покупки для принтера.</p>'}`;
 }
 
@@ -119,7 +133,7 @@ export function viewSettings(C, { demo, email }) {
   return `<div class="page-head"><h1>Настройки</h1></div>
     <section class="set">
       <h2>Принтеры</h2>
-      ${state.printers.length ? `<ul class="ex-list">${state.printers.map(p => `<li><button data-edit="printer:${p.id}"><span class="ex-date">${dShort(p.bought_on)} ${p.bought_on.slice(2, 4)}</span><span class="ex-name">${esc(p.name)}<small>заработал ${rub(sum(C.orders.filter(o => o.printer_id === p.id), o => o.income))}</small></span><b>${rub(p.price)}</b></button></li>`).join('')}</ul>` : '<p class="note">Добавьте принтер, чтобы считать окупаемость и электричество.</p>'}
+      ${state.printers.length ? `<ul class="ex-list">${state.printers.map(p => `<li><button data-edit="printer:${p.id}"><span class="ex-date">${dShort(p.bought_on)} ${p.bought_on.slice(2, 4)}</span><span class="ex-name">${esc(p.name)}<small>заработал ${rub(sum(C.allOrders.filter(o => C.ownerOf(o) === p.id), o => o.income))}</small></span><b>${rub(p.price)}</b></button></li>`).join('')}</ul>` : '<p class="note">Добавьте принтер, чтобы считать окупаемость и электричество.</p>'}
       <button class="btn ghost" data-add="printer">Добавить принтер</button>
     </section>
     <section class="set">

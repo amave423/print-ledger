@@ -1,8 +1,8 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
-// без настроек Supabase сайт работает в демо-режиме: данные из demo-data.json, изменения только в памяти
-export const demo = SUPABASE_URL.includes('YOUR_PROJECT');
+// без настроек Supabase (или локально с ?demo) сайт работает в демо-режиме: данные из demo-data.json, изменения только в памяти
+export const demo = SUPABASE_URL.includes('YOUR_PROJECT') || (location.hostname === 'localhost' && new URLSearchParams(location.search).has('demo'));
 export const sb = demo ? null : createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export const state = { printers: [], spools: [], extras: [], orders: [], settings: { tariff: 6.5, presets: {} } };

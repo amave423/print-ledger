@@ -1,15 +1,24 @@
 import { sb, demo, state, loadAll, saveSettings } from './db.js';
 import { compute, presets } from './calc.js';
 import { FORMS, wireForm } from './forms.js';
-import { ui, viewHome, viewOrders, viewPlastic, viewExtras, viewSettings } from './views.js';
+import { ui, viewHome, viewOrders, viewPlastic, viewExtras, viewSettings, viewPrinters } from './views.js';
 
 const $ = s => document.querySelector(s);
 const VIEWS = { home: viewHome, orders: viewOrders, plastic: viewPlastic, extras: viewExtras, settings: viewSettings };
 let email = '';
 
 function render() {
+  if (ui.printer !== 'all' && !state.printers.some(p => p.id === ui.printer)) ui.printer = 'all';
   document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === ui.screen));
-  $('#view').innerHTML = VIEWS[ui.screen](compute(), { demo, email });
+  $('#printers').innerHTML = viewPrinters(compute('all'));
+  $('#view').innerHTML = VIEWS[ui.screen](compute(ui.printer), { demo, email });
+}
+
+function setPrinter(id) {
+  ui.printer = id;
+  try { localStorage.setItem('printer', id); } catch {}
+  ui.orderFilter = 'Все';
+  render();
 }
 
 // экран хранится в адресе (#orders), поэтому работает кнопка «Назад»
@@ -43,21 +52,22 @@ function closeSheet() { $('#sheet').classList.remove('on'); document.body.style.
 
 async function exportXlsx() {
   if (!window.XLSX) await new Promise((ok, err) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = ok; s.onerror = err; document.head.appendChild(s); });
-  const C = compute(), r = n => Math.round(n * 100) / 100, wb = XLSX.utils.book_new();
+  const C = compute('all'), r = n => Math.round(n * 100) / 100, wb = XLSX.utils.book_new();
   const sheet = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name);
-  sheet('Заказы', C.orders.map(o => ({ 'Дата': o.ordered_on, 'Изделие': o.item, 'Клиент': o.client, 'Пластик': o.plastic, 'Вес, г': +o.weight, 'Брак, г': +o.waste,
+  sheet('Заказы', C.orders.map(o => ({ 'Дата': o.ordered_on, 'Принтер': state.printers.find(p => p.id === C.ownerOf(o))?.name || '', 'Изделие': o.item, 'Клиент': o.client, 'Пластик': o.plastic, 'Вес, г': +o.weight, 'Брак, г': +o.waste,
     'За печать': +o.print_price, 'За моделирование': +o.model_price, 'Предоплата': +o.prepay, 'Часы': +o.hours, 'Пластик ушёл, ₽': r(o.cost), 'Электричество, ₽': r(o.energy), 'Чистыми, ₽': r(o.profit), 'Заметка': o.note })));
   sheet('Пластик', C.spools.map(s => ({ 'Дата покупки': s.bought_on, 'Пластик': s.name, 'Бренд': s.brand, 'Вес, г': +s.weight, 'Цена': +s.price, 'Осталось, г': r(s.left) })));
-  sheet('Допы', state.extras.map(e => ({ 'Дата покупки': e.bought_on, 'Что': e.name, 'Категория': e.category, 'Цена': +e.price })));
+  sheet('Допы', state.extras.map(e => ({ 'Дата покупки': e.bought_on, 'Что': e.name, 'Категория': e.category, 'Принтер': state.printers.find(p => p.id === e.printer_id)?.name || 'общее', 'Цена': +e.price })));
   sheet('Принтеры', state.printers.map(p => ({ 'Дата покупки': p.bought_on, 'Модель': p.name, 'Цена': +p.price })));
   XLSX.writeFile(wb, `учёт-печати-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-go],[data-add],[data-edit],[data-filter],[data-toggle],[data-close],[data-action]');
+  const t = e.target.closest('[data-go],[data-add],[data-edit],[data-filter],[data-toggle],[data-close],[data-action],[data-printer]');
   if (!t) return;
   const d = t.dataset;
-  if (d.go) go(d.go);
+  if (d.printer) setPrinter(d.printer);
+  else if (d.go) go(d.go);
   else if (d.add) openSheet(d.add);
   else if (d.edit) { const [kind, id] = d.edit.split(':'); openSheet(kind, state[FORMS[kind].table].find(r => r.id === id)); }
   else if (d.filter) { ui.orderFilter = d.filter; render(); }
