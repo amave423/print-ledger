@@ -23,7 +23,7 @@ export function viewHome(C) {
       : 'Осталось получить от клиентов, чтобы вернуть все вложения.'}</p>
     <div class="track">
       <div class="fill" style="width:${C.returned / max * 100}%"></div>
-      <div class="mark" style="left:${C.invested / max * 100}%"><span>потрачено ${rub(C.invested)}</span></div>
+      <div class="mark ${C.invested / max < .2 ? 'at-start' : C.invested / max > .8 ? 'at-end' : ''}" style="left:${C.invested / max * 100}%"><span>потрачено ${rub(C.invested)}</span></div>
     </div>
     <div class="track-legend"><span>0</span><span>получено от клиентов ${rub(C.returned)}</span></div>
     <div class="spent">
