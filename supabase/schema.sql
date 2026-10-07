@@ -27,6 +27,7 @@ create table if not exists extras (
   name text not null,
   category text not null default 'Другое',
   price numeric not null default 0,
+  printer_id uuid references printers on delete set null,
   bought_on date not null default current_date,
   created_at timestamptz not null default now()
 );
